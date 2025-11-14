@@ -1,0 +1,67 @@
+{
+  "project_info": {
+    "project_number": "672014659899",
+    "project_id": "ksdiv-3ba17",
+    "storage_bucket": "ksdiv-3ba17.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:672014659899:android:f1afdf8480f9e99779471e",
+        "android_client_info": {
+          "package_name": "com.ekcovercel.com"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBsc_2qvf5sdJAQC8fFRut4sRhQALmfElU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:672014659899:android:115cf7b7261ef22679471e",
+        "android_client_info": {
+          "package_name": "com.nodlelainnovations.ekco"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBsc_2qvf5sdJAQC8fFRut4sRhQALmfElU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:672014659899:android:16a0a67c336d0d0079471e",
+        "android_client_info": {
+          "package_name": "com.nodlelatech.ekco"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBsc_2qvf5sdJAQC8fFRut4sRhQALmfElU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
