@@ -1,4 +1,7 @@
+import LeafletMap from '@/components/LeafletMap';
+import { MapService } from '@/services/mapService';
 import { Ionicons } from '@expo/vector-icons';
+import * as Clipboard from 'expo-clipboard';
 import * as Location from 'expo-location';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { collection, getDocs, limit, onSnapshot, orderBy, query, where } from 'firebase/firestore';
@@ -7,7 +10,6 @@ import { ActivityIndicator, Alert, Dimensions, Modal, Pressable, ScrollView, Sha
 import MapView, { Marker, Polyline } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { auth, db } from '../../config/firebase';
-import * as Clipboard from 'expo-clipboard';
 
 interface Vehicle {
   id: string;
@@ -39,6 +41,7 @@ export default function LocationScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [gpsData, setGpsData] = useState<any[]>([]);
   const [routeCoordinates, setRouteCoordinates] = useState<{ latitude: number; longitude: number }[]>([]);
+  const [useGoogleMaps, setUseGoogleMaps] = useState(true);
 
   // Set header title to vehicle name
   useEffect(() => {
@@ -61,7 +64,7 @@ export default function LocationScreen() {
         }
 
         const results = await getDocs(
-          query(collection(db, "vehicles"), 
+          query(collection(db, "vehicles"),
           where("userId", "==", currentUserId),
           where("__name__", "==", vehicleId))
         );
@@ -91,9 +94,20 @@ export default function LocationScreen() {
       }
     };
 
+    const checkMapService = async () => {
+      const useGoogle = await MapService.shouldUseGoogleMaps();
+      setUseGoogleMaps(useGoogle);
+    };
+
     getLocationPermission();
     getVehicle();
+    checkMapService();
   }, [vehicleId]);
+
+  // Force Leaflet for testing
+  useEffect(() => {
+    setUseGoogleMaps(false);
+  }, []);
 
   // Real-time GPS data subscription
   useEffect(() => {
@@ -246,31 +260,51 @@ export default function LocationScreen() {
     <>
       {/* Map Container */}
       <View className="flex-1 relative">
-        <MapView
-          style={{ flex: 1 }}
-          initialRegion={{
-            latitude: vehicleLatitude,
-            longitude: vehicleLongitude,
-            latitudeDelta: 0.01,
-            longitudeDelta: 0.01,
-          }}
-          followsUserLocation
-          showsUserLocation
-        >
-          <Marker
-            coordinate={{ latitude: vehicleLatitude, longitude: vehicleLongitude }}
-            title={selectedVehicle.shortLabel}
-            description={derivedStatus}
-            pinColor={derivedStatus === 'Moving' ? '#3b82f6' : '#ef4444'}
-          />
-          {routeCoordinates.length > 1 && (
-            <Polyline
-              coordinates={routeCoordinates}
-              strokeColor="#000"
-              strokeWidth={3}
+        {useGoogleMaps ? (
+          <MapView
+            style={{ flex: 1 }}
+            initialRegion={{
+              latitude: vehicleLatitude,
+              longitude: vehicleLongitude,
+              latitudeDelta: 0.01,
+              longitudeDelta: 0.01,
+            }}
+            followsUserLocation
+            showsUserLocation
+          >
+            <Marker
+              coordinate={{ latitude: vehicleLatitude, longitude: vehicleLongitude }}
+              title={selectedVehicle.shortLabel}
+              description={derivedStatus}
+              pinColor={derivedStatus === 'Moving' ? '#3b82f6' : '#ef4444'}
             />
-          )}
-        </MapView>
+            {routeCoordinates.length > 1 && (
+              <Polyline
+                coordinates={routeCoordinates}
+                strokeColor="#000"
+                strokeWidth={3}
+              />
+            )}
+          </MapView>
+        ) : (
+          <LeafletMap
+            center={{ lat: vehicleLatitude, lng: vehicleLongitude }}
+            markers={[{
+              lat: vehicleLatitude,
+              lng: vehicleLongitude,
+              title: selectedVehicle.shortLabel,
+              description: derivedStatus,
+              color: derivedStatus === 'Moving' ? '#3b82f6' : '#ef4444'
+            }]}
+            polylines={routeCoordinates.length > 1 ? [{
+              coordinates: routeCoordinates.map(c => ({ lat: c.latitude, lng: c.longitude })),
+              color: '#000',
+              weight: 3
+            }] : []}
+            zoom={16}
+            style={{ flex: 1 }}
+          />
+        )}
 
         {/* Status Badge */}
         <View className="absolute top-4 left-4 bg-white rounded-lg p-3 shadow-md">

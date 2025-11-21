@@ -24,17 +24,17 @@ export default function About() {
           <View className="space-y-3">
             <View>
               <Text className="text-sm text-gray-600 font-medium">App Name</Text>
-              <Text className="text-lg text-black">Ekco Vehicle Guard</Text>
+              <Text className="text-lg text-black">Ekco Vehicle Tracker</Text>
             </View>
 
             <View>
               <Text className="text-sm text-gray-600 font-medium">Version</Text>
-              <Text className="text-lg text-black">2.0.0</Text>
+              <Text className="text-lg text-black">1.14.0</Text>
             </View>
 
             <View>
               <Text className="text-sm text-gray-600 font-medium">Package</Text>
-              <Text className="text-sm text-gray-800 font-mono">com.ekcomobile.app</Text>
+              <Text className="text-sm text-gray-800 font-mono">com.ekcovercel.com</Text>
             </View>
 
             <View>

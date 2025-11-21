@@ -171,7 +171,7 @@ export default function AuthScreen() {
                         className="w-28 h-28 mb-6 self-center"
                         resizeMode="contain"
                     />
-                    <Text className="text-gray-300">Version 1.14.0</Text>
+                    <Text className="text-gray-300">Version 1.14.1</Text>
                 </View>
             </View>
 

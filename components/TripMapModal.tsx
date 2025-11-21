@@ -1,3 +1,5 @@
+import LeafletMap from '@/components/LeafletMap';
+import { MapService } from '@/services/mapService';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Modal, Text, TouchableOpacity, View } from 'react-native';
@@ -118,14 +120,21 @@ const TripMapModal = ({ trip, vehicleName, onClose }: MapModalProps) => {
   const [endAddress, setEndAddress] = useState<string>('');
   const [isLoadingAddresses, setIsLoadingAddresses] = useState(true);
   const [geocodingProvider, setGeocodingProvider] = useState<string>('');
+  const [useGoogleMaps, setUseGoogleMaps] = useState(true);
 
   useEffect(() => {
     if (trip.gpsLogs && trip.gpsLogs.length > 0) {
       const region = calculateRegion(trip.gpsLogs);
       setMapRegion(region);
       loadAddresses();
+      checkMapService();
     }
   }, [trip.gpsLogs]);
+
+  const checkMapService = async () => {
+    const useGoogle = await MapService.shouldUseGoogleMaps();
+    setUseGoogleMaps(useGoogle);
+  };
 
   const loadAddresses = async () => {
     if (!trip.gpsLogs || trip.gpsLogs.length === 0) {
@@ -196,12 +205,21 @@ const TripMapModal = ({ trip, vehicleName, onClose }: MapModalProps) => {
 
   const startCoord = trip.gpsLogs[0];
   const endCoord = trip.gpsLogs[trip.gpsLogs.length - 1];
-  const distance = calculateDistance(
-    startCoord.latitude,
-    startCoord.longitude,
-    endCoord.latitude,
-    endCoord.longitude
-  );
+
+  // Calculate total mileage traveled along the GPS path
+  let totalDistance = 0;
+  if (trip.gpsLogs.length >= 2) {
+    for (let i = 0; i < trip.gpsLogs.length - 1; i++) {
+      const segmentDistance = calculateDistance(
+        trip.gpsLogs[i].latitude,
+        trip.gpsLogs[i].longitude,
+        trip.gpsLogs[i + 1].latitude,
+        trip.gpsLogs[i + 1].longitude
+      );
+      totalDistance += segmentDistance;
+    }
+  }
+  const distance = parseFloat(totalDistance.toFixed(2));
 
   return (
     <Modal visible animationType="slide">
@@ -224,52 +242,81 @@ const TripMapModal = ({ trip, vehicleName, onClose }: MapModalProps) => {
 
         {/* Map Container */}
         <View className="flex-1 relative">
-          <MapView
-            key={mapKey}
-            style={{ flex: 1 }}
-            region={mapRegion || undefined}
-            initialRegion={mapRegion || undefined}
-            showsUserLocation={false}
-            showsMyLocationButton={true}
-            showsCompass={true}
-            showsScale={true}
-            onPress={handleMapPress}
-            scrollEnabled={true}
-            zoomEnabled={true}
-            rotateEnabled={true}
-            pitchEnabled={false}
-          >
-            {/* Start Marker */}
-            <Marker
-              coordinate={startCoord}
-              title="Start Point"
-              description={`Started: ${formatDate(trip.date)}`}
-              identifier="start"
+          {useGoogleMaps ? (
+            <MapView
+              key={mapKey}
+              style={{ flex: 1 }}
+              region={mapRegion || undefined}
+              initialRegion={mapRegion || undefined}
+              showsUserLocation={false}
+              showsMyLocationButton={true}
+              showsCompass={true}
+              showsScale={true}
+              onPress={handleMapPress}
+              scrollEnabled={true}
+              zoomEnabled={true}
+              rotateEnabled={true}
+              pitchEnabled={false}
             >
-              <StartMarker />
-            </Marker>
+              {/* Start Marker */}
+              <Marker
+                coordinate={startCoord}
+                title="Start Point"
+                description={`Started: ${formatDate(trip.date)}`}
+                identifier="start"
+              >
+                <StartMarker />
+              </Marker>
 
-            {/* End Marker */}
-            <Marker
-              coordinate={endCoord}
-              title="End Point"
-              description={`Distance: ${distance} km`}
-              identifier="end"
-            >
-              <EndMarker />
-            </Marker>
+              {/* End Marker */}
+              <Marker
+                coordinate={endCoord}
+                title="End Point"
+                description={`Distance: ${distance} km`}
+                identifier="end"
+              >
+                <EndMarker />
+              </Marker>
 
-            {/* Route Polyline - only render if we have multiple points */}
-            {trip.gpsLogs.length > 1 && (
-              <Polyline
-                coordinates={trip.gpsLogs}
-                strokeColor="#3b82f6"
-                strokeWidth={4}
-                lineCap="round"
-                lineJoin="round"
-              />
-            )}
-          </MapView>
+              {/* Route Polyline - only render if we have multiple points */}
+              {trip.gpsLogs.length > 1 && (
+                <Polyline
+                  coordinates={trip.gpsLogs}
+                  strokeColor="#3b82f6"
+                  strokeWidth={4}
+                  lineCap="round"
+                  lineJoin="round"
+                />
+              )}
+            </MapView>
+          ) : (
+            <LeafletMap
+              center={{ lat: (startCoord.latitude + endCoord.latitude) / 2, lng: (startCoord.longitude + endCoord.longitude) / 2 }}
+              markers={[
+                {
+                  lat: startCoord.latitude,
+                  lng: startCoord.longitude,
+                  title: "Start Point",
+                  description: `Started: ${formatDate(trip.date)}`,
+                  color: '#10b981'
+                },
+                {
+                  lat: endCoord.latitude,
+                  lng: endCoord.longitude,
+                  title: "End Point",
+                  description: `Distance: ${distance} km`,
+                  color: '#ef4444'
+                }
+              ]}
+              polylines={trip.gpsLogs.length > 1 ? [{
+                coordinates: trip.gpsLogs.map(log => ({ lat: log.latitude, lng: log.longitude })),
+                color: '#3b82f6',
+                weight: 4
+              }] : []}
+              zoom={13}
+              style={{ flex: 1 }}
+            />
+          )}
 
           {/* Map Controls Overlay */}
           <View className="absolute top-4 right-4">

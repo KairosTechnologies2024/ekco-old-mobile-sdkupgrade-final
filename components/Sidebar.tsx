@@ -5,7 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { signOut } from 'firebase/auth';
 import React from 'react';
-import { Alert, Dimensions, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Dimensions, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { auth } from '../app/config/firebase';
@@ -140,7 +140,9 @@ const router = useRouter();
 
   return (
     <>
+      {isVisible && <StatusBar barStyle="light-content" />}
       {isVisible && (
+        
         <TouchableOpacity
           style={styles.overlay}
           onPress={onClose}

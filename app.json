@@ -59,10 +59,8 @@
         "expo-splash-screen",
         {
           "image": "./assets/images/ekco logo white.png",
-          "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#182f51"
-          
         }
       ],
       [

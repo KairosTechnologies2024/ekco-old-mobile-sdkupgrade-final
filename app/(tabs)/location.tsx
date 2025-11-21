@@ -1,3 +1,5 @@
+import LeafletMap from '@/components/LeafletMap';
+import { MapService } from '@/services/mapService';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
@@ -85,7 +87,9 @@ interface Vehicle {
 export default function Home() {
   const router = useRouter();
   const screenHeight = Dimensions.get('window').height;
+  const screenWidth = Dimensions.get('window').width;
   const isSmallScreen = screenHeight < 700; // Threshold for small screens
+  const isNarrowScreen = screenWidth < 300; // Threshold for narrow screens
 
   // Helper function for dynamic greeting
   const getGreeting = () => {
@@ -107,6 +111,7 @@ export default function Home() {
 
   // UI state from new app
   const [currentSlide, setCurrentSlide] = useState(0);
+  const [useGoogleMaps, setUseGoogleMaps] = useState(true);
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [isVehicleListModalVisible, setIsVehicleListModalVisible] = useState(false);
 
@@ -145,7 +150,7 @@ export default function Home() {
 
   // Get map region that includes all vehicles
   const getMapRegion = () => {
-    const coords = Object.values(vehicleCoordinates);
+    const coords = Object.values(vehicleCoordinates).filter(coord => coord && typeof coord.latitude === 'number' && !isNaN(coord.latitude) && typeof coord.longitude === 'number' && !isNaN(coord.longitude));
     if (coords.length === 0) {
       return {
         latitude: -26.2041,
@@ -178,12 +183,60 @@ export default function Home() {
     };
   };
 
+  // Get center point and zoom level that covers all vehicles
+  const getMapCenterAndZoom = () => {
+    const coords = Object.values(vehicleCoordinates).filter(coord => coord && typeof coord.latitude === 'number' && !isNaN(coord.latitude) && typeof coord.longitude === 'number' && !isNaN(coord.longitude));
+    if (coords.length === 0) {
+      return {
+        center: { lat: -26.2041, lng: 28.0473 },
+        zoom: 0
+      };
+    }
+
+    const latitudes = coords.map(c => c.latitude);
+    const longitudes = coords.map(c => c.longitude);
+
+    const minLat = Math.min(...latitudes);
+    const maxLat = Math.max(...latitudes);
+    const minLng = Math.min(...longitudes);
+    const maxLng = Math.max(...longitudes);
+
+    const center = {
+      lat: (minLat + maxLat) / 2,
+      lng: (minLng + maxLng) / 2,
+    };
+
+    // Calculate zoom level to fit all vehicles
+    const latDelta = maxLat - minLat;
+    const lngDelta = maxLng - minLng;
+
+    // Rough calculation for zoom level (higher zoom = more zoomed in)
+    // This is an approximation - Leaflet zoom levels are logarithmic
+    let zoom = 13; // default for single vehicle - good street level view
+
+    if (latDelta > 0 || lngDelta > 0) {
+      // Calculate the maximum delta and determine zoom - closer zoom levels
+      const maxDelta = Math.max(latDelta, lngDelta);
+      if (maxDelta < 0.01) zoom = 17; // Very close vehicles - zoom closer
+      else if (maxDelta < 0.05) zoom = 15; // Closer than before
+      else if (maxDelta < 0.1) zoom = 13; // Closer than before
+      else if (maxDelta < 0.5) zoom = 11; // Closer than before
+      else if (maxDelta < 2) zoom = 9; // Closer than before
+      else if (maxDelta < 5) zoom = 7; // Closer than before
+      else if (maxDelta < 10) zoom = 5; // Closer than before
+      else zoom = 3; // Very spread out - closer than before
+    }
+
+    return { center, zoom };
+  };
+
   // Get user profile and vehicles
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       if (user) {
         getProfile();
         getVehicles();
+        checkMapService();
       } else {
         setIsLoading(false);
         setIsSpeedLoading(false);
@@ -192,6 +245,11 @@ export default function Home() {
 
     return unsubscribeAuth;
   }, []);
+
+  const checkMapService = async () => {
+    const useGoogle = await MapService.shouldUseGoogleMaps();
+    setUseGoogleMaps(useGoogle);
+  };
 
   const getProfile = async () => {
     try {
@@ -258,8 +316,13 @@ export default function Home() {
   useEffect(() => {
     if (vehicles.length === 0) return;
 
+    console.log('Setting up GPS subscriptions for vehicles:', vehicles.length);
+
     const unsubscribes = vehicles.map(vehicle => {
-      if (!vehicle.deviceSerial) return null;
+      if (!vehicle.deviceSerial) {
+        console.log(`Vehicle ${vehicle.id} has no deviceSerial`);
+        return null;
+      }
 
       try {
         const gpsQ = query(
@@ -272,13 +335,18 @@ export default function Home() {
         return onSnapshot(gpsQ, (querySnapshot) => {
           if (!querySnapshot.empty) {
             const gpsData = querySnapshot.docs[0].data();
+            const lat = parseFloat(gpsData.lat);
+            const lng = parseFloat(gpsData.long);
+            console.log(`GPS data for ${vehicle.id}: lat=${lat}, lng=${lng}`);
             setVehicleCoordinates(prev => ({
               ...prev,
               [vehicle.id]: {
-                latitude: parseFloat(gpsData.lat),
-                longitude: parseFloat(gpsData.long)
+                latitude: lat,
+                longitude: lng
               }
             }));
+          } else {
+            console.log(`No GPS data for ${vehicle.id}`);
           }
         });
       } catch (error) {
@@ -486,17 +554,17 @@ export default function Home() {
   </TouchableWithoutFeedback>
 )}
 
-      <View className="flex-row justify-between items-center px-4 py-4">
-        <Text className="text-3xl font-bold">
+      <View className={`flex-row justify-between items-center ${isSmallScreen || isNarrowScreen ? 'py-4 px-2' : 'py-4 px-4'}`}>
+        <Text className={isSmallScreen || isNarrowScreen ? 'text-xl font-bold' : 'text-3xl font-bold'}>
           {getGreeting()}, {'\n'}{name?.split(' ')[0] || 'User'} 😁
         </Text>
 
         <View className="flex-row items-center">
           <Pressable
-            className="relative mr-4"
+            className="relative mr-2"
             onPress={() => router.push('/alerts')}
           >
-            <Ionicons name="notifications-outline" size={32} color="black" />
+            <Ionicons name="notifications-outline" size={isSmallScreen || isNarrowScreen ? 28 : 32} color="black" />
           </Pressable>
           <View className="relative">
             <Pressable
@@ -505,7 +573,7 @@ export default function Home() {
             >
               <Image
                 source={require('../../assets/images/user.png')}
-                className="w-12 h-12 rounded-full border-2 border-gray-300"
+                className={`w-12 h-12 rounded-full border-2 border-gray-300`}
               />
             </Pressable>
 
@@ -544,18 +612,18 @@ export default function Home() {
         <View className="flex-1">
           {/* Banner/Slider */}
           <View
-            className={isSmallScreen ? 'h-24 w-full rounded-2xl px-6 py-4 flex-row items-center mt-4' : 'h-32 w-full rounded-2xl px-6 py-6 flex-row items-center mt-4'}
+            className={`w-full rounded-2xl flex-row items-center mt-4 ${isSmallScreen || isNarrowScreen ? 'h-24 px-4 py-3' : 'h-32 px-6 py-6'}`}
             style={{ backgroundColor: sliderData[currentSlide].backgroundColor }}
           >
             <View className="flex-1">
-              <Text className={isSmallScreen ? 'text-white text-lg font-bold' : 'text-white text-xl font-bold'}>
+              <Text className={`text-white font-bold ${isSmallScreen || isNarrowScreen ? 'text-base' : 'text-xl'}`}>
                 {sliderData[currentSlide].title}
               </Text>
             </View>
-            <View className="items-center justify-center ml-4">
+            <View className="items-center justify-center ml-2">
               <Ionicons
                 name={sliderData[currentSlide].icon as any}
-                size={isSmallScreen ? 32 : 40}
+                size={isSmallScreen || isNarrowScreen ? 28 : 40}
                 color="rgba(255,255,255,0.8)"
               />
             </View>
@@ -583,29 +651,54 @@ export default function Home() {
           {/* Map Section */}
        {isFullScreen ? (
   <View className="absolute inset-0 z-50 bg-white">
-    <MapView
-      style={{ flex: 1 }}
-      region={getMapRegion()}
-      onPress={toggleFullScreen}
-    >
-                {vehicles.map((vehicle) => {
-                  const coords = vehicleCoordinates[vehicle.id];
-                  const speed = vehicleSpeeds[vehicle.id] || 0;
-                  
-                  if (!coords) return null;
+    {useGoogleMaps ? (
+      <MapView
+        style={{ flex: 1 }}
+        region={getMapRegion()}
+        onPress={toggleFullScreen}
+      >
+                  {vehicles.map((vehicle) => {
+                    const coords = vehicleCoordinates[vehicle.id];
+                    const speed = vehicleSpeeds[vehicle.id] || 0;
 
-                  return (
-                    <Marker
-                      key={vehicle.id}
-                      coordinate={coords}
-                      title={vehicle.shortName}
-                      description={`${getVehicleStatus(speed)} - ${speed} km/h`}
-                    >
-                      <CustomMarker speed={speed} title={vehicle.shortName} />
-                    </Marker>
-                  );
-                })}
-              </MapView>
+                    if (!coords) return null;
+
+                    return (
+                      <Marker
+                        key={vehicle.id}
+                        coordinate={coords}
+                        title={vehicle.shortName}
+                        description={`${getVehicleStatus(speed)} - ${speed} km/h`}
+                      >
+                        <CustomMarker speed={speed} title={vehicle.shortName} />
+                      </Marker>
+                    );
+                  })}
+                </MapView>
+    ) : (
+      <LeafletMap
+      center={getMapCenterAndZoom().center}
+      markers={vehicles.map(vehicle => {
+        const coords = vehicleCoordinates[vehicle.id];
+        const speed = vehicleSpeeds[vehicle.id] || 0;
+        if (!coords || isNaN(coords.latitude) || isNaN(coords.longitude)) {
+          console.log(`Skipping marker for ${vehicle.id}: invalid coords`, coords);
+          return null;
+        }
+        const marker = {
+          lat: coords.latitude,
+          lng: coords.longitude,
+          title: vehicle.shortName,
+          description: `${getVehicleStatus(speed)} - ${speed} km/h`,
+          color: getPinColor(speed)
+        };
+        console.log(`Marker for ${vehicle.id}:`, marker);
+        return marker;
+      }).filter(Boolean) as any[]}
+      zoom={getMapCenterAndZoom().zoom}
+        style={{ flex: 1 }}
+      />
+    )}
               <Pressable
                 className="absolute top-10 right-4 bg-black bg-opacity-50 rounded-full p-2"
                 onPress={toggleFullScreen}
@@ -615,33 +708,61 @@ export default function Home() {
             </View>
           ) : (
            <Pressable onPress={toggleFullScreen} style={{ position: 'relative' }}>
-  <MapView
-    style={isSingleVehicle ?
-      { height: isSmallScreen ? 200 : 300, marginHorizontal: 16, marginTop: 8, borderRadius: 8 } :
-      { height: isSmallScreen ? 120 : 192, marginHorizontal: 16, marginTop: 8, borderRadius: 8 }
-    }
-    region={getMapRegion()}
-    scrollEnabled={false}
-    zoomEnabled={false}
-  >
-                {vehicles.map((vehicle) => {
-                  const coords = vehicleCoordinates[vehicle.id];
-                  const speed = vehicleSpeeds[vehicle.id] || 0;
-                  
-                  if (!coords) return null;
+  {useGoogleMaps ? (
+    <MapView
+      style={isSingleVehicle ?
+        { height: isSmallScreen ? 200 : 300, marginHorizontal: 16, marginTop: 8, borderRadius: 8 } :
+        { height: isSmallScreen ? 120 : 192, marginHorizontal: 16, marginTop: 8, borderRadius: 8 }
+      }
+      region={getMapRegion()}
+      scrollEnabled={false}
+      zoomEnabled={false}
+    >
+                  {vehicles.map((vehicle) => {
+                    const coords = vehicleCoordinates[vehicle.id];
+                    const speed = vehicleSpeeds[vehicle.id] || 0;
 
-                  return (
-                    <Marker
-                      key={vehicle.id}
-                      coordinate={coords}
-                      title={vehicle.shortName}
-                      description={`${getVehicleStatus(speed)} - ${speed} km/h`}
-                    >
-                      <CustomMarker speed={speed} title={vehicle.shortName} />
-                    </Marker>
-                  );
-                })}
-              </MapView>
+                    if (!coords) return null;
+
+                    return (
+                      <Marker
+                        key={vehicle.id}
+                        coordinate={coords}
+                        title={vehicle.shortName}
+                        description={`${getVehicleStatus(speed)} - ${speed} km/h`}
+                      >
+                        <CustomMarker speed={speed} title={vehicle.shortName} />
+                      </Marker>
+                    );
+                  })}
+                </MapView>
+  ) : (
+    <LeafletMap
+      center={getMapCenterAndZoom().center}
+      markers={vehicles.map(vehicle => {
+        const coords = vehicleCoordinates[vehicle.id];
+        const speed = vehicleSpeeds[vehicle.id] || 0;
+        if (!coords || isNaN(coords.latitude) || isNaN(coords.longitude)) {
+          console.log(`Skipping marker for ${vehicle.id}: invalid coords`, coords);
+          return null;
+        }
+        const marker = {
+          lat: coords.latitude,
+          lng: coords.longitude,
+          title: vehicle.shortName,
+          description: `${getVehicleStatus(speed)} - ${speed} km/h`,
+          color: getPinColor(speed)
+        };
+        console.log(`Marker for ${vehicle.id}:`, marker);
+        return marker;
+      }).filter(Boolean) as any[]}
+      zoom={getMapCenterAndZoom().zoom}
+      style={isSingleVehicle ?
+        { height: isSmallScreen ? 200 : 300, marginHorizontal: 16, marginTop: 8, borderRadius: 8 } :
+        { height: isSmallScreen ? 120 : 192, marginHorizontal: 16, marginTop: 8, borderRadius: 8 }
+      }
+    />
+  )}
             </Pressable>
           )}
 
